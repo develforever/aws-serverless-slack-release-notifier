@@ -1,0 +1,67 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+org: nonedev
+# "app" enables Serverless Framework Dashboard features and sharing them with other Services.
+app: test-slack
+# "service" is the name of this project. This will also be added to your AWS resource names.
+service: test-slack
+
+custom:
+  dotenv: true
+  webhookUrl: ${env:SLACK_WEBHOOK_URL}
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  environment:
+    SLACK_WEBHOOK_URL: ${self:custom.webhookUrl}
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - dynamodb:PutItem
+      Resource:
+        - arn:aws:dynamodb:us-east-1:196408463014:table/releases
+plugins:
+  - serverless-dotenv-plugin
+
+functions:
+  hello:
+    handler: handler.hello
+    events:
+      - httpApi:
+          path: /
+          method: get
+  saveMessage:
+    handler: handler.saveMessage
+    events:
+      - http:
+          path: release
+          method: put
+          cors: true
+  handleRelease:
+    handler: handler.handleRelease
+    events:
+      - stream:
+          type: dynamodb
+          arn:
+            Fn::GetAtt:
+              - ReleasesTable
+              - StreamArn
+
+resources:
+  Resources:
+    ReleasesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: releases
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        StreamSpecification:
+          StreamViewType: NEW_IMAGE
+
+
